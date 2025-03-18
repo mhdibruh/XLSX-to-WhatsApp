@@ -366,18 +366,22 @@
 .continue-button {
   display: block;
   margin: 1rem auto 0;
-  padding: 0.5rem 1.5rem;
+  padding: 0.75rem 2rem;
   background-color: #25D366;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.3s ease;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .continue-button:hover {
   background-color: #128C7E;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .batch-progress {
@@ -392,4 +396,22 @@
   flex-direction: column;
   align-items: center;
   gap: 1rem;
+}
+
+.warning-steps {
+  margin: 0.5rem 0;
+  padding-left: 2rem;
+  color: #666;
+}
+
+.warning-steps li {
+  margin: 0.5rem 0;
+  padding-left: 0.5rem;
+}
+
+.warning-note {
+  margin-top: 0.5rem;
+  font-weight: 500;
+  color: #856404;
+  font-style: italic;
 }

@@ -132,16 +132,20 @@ function App() {
         // Open all numbers in current batch simultaneously
         currentBatchNumbers.forEach(number => {
           const cleanNumber = number.replace(/[^\d+]/g, '');
-          const whatsappUrl = `https://wa.me/${cleanNumber}?text=${encodedMessage}`;
-          window.open(whatsappUrl, '_blank');
+          // Using web.whatsapp.com directly
+          const whatsappUrl = `https://web.whatsapp.com/send?phone=${cleanNumber}&text=${encodedMessage}`;
+          window.open(whatsappUrl, `whatsapp_${cleanNumber}`); // Named window for better tracking
           currentNumber++;
         });
 
         // If not the last batch, wait for user confirmation
         if (batchIndex < totalBatches - 1) {
           await new Promise(resolve => {
-            setStatus(`✅ Batch ${batchIndex + 1} complete (${currentNumber}/${phoneNumbers.length} numbers). 
-              Please send the current messages and click 'Continue' for the next batch`);
+            setStatus(`✅ Batch ${batchIndex + 1}: Send all messages before continuing.
+              1. Wait for each chat to load
+              2. Click send (green button) in each tab
+              3. Keep tabs open until messages are sent
+              4. Click 'Continue' for next batch`);
             const continueBtn = document.createElement('button');
             continueBtn.textContent = 'Continue with Next Batch';
             continueBtn.className = 'continue-button';
@@ -151,11 +155,14 @@ function App() {
         }
       }
 
-      setStatus(`✅ All messages opened! Total numbers processed: ${phoneNumbers.length}`);
+      setStatus(`✅ All chats opened! Remember to:
+        1. Wait for each chat to load
+        2. Send each message
+        3. Close tabs after sending`);
       setCurrentBatch(0);
     } catch (error) {
-      console.error('Error sending messages:', error);
-      setStatus('❌ Error sending messages: ' + error.message);
+      console.error('Error opening chats:', error);
+      setStatus('❌ Error opening chats: ' + error.message);
     }
   };
 
@@ -258,14 +265,18 @@ function App() {
         {showWarning && (
           <div className="whatsapp-warning">
             <div className="warning-content">
-              <h3>⚠️ WhatsApp Messaging Information</h3>
-              <p>This will open WhatsApp Web in batches of 10. You'll need to:</p>
-              <ul>
-                <li>Be logged into WhatsApp Web</li>
-                <li>Allow pop-ups in your browser</li>
-                <li>Send messages in the current batch</li>
-                <li>Click 'Continue' when ready for the next batch</li>
-              </ul>
+              <h3>⚠️ WhatsApp Web Automation</h3>
+              <p>The process will:</p>
+              <ol className="warning-steps">
+                <li>Open WhatsApp Web for each number</li>
+                <li>Attempt to send message automatically</li>
+                <li>Close the window after sending</li>
+                <li>Continue with next number</li>
+              </ol>
+              <p className="warning-note">
+                Important: Keep the app window open during the process.
+                Make sure you're logged into WhatsApp Web first!
+              </p>
               <button 
                 className="warning-button"
                 onClick={() => setShowWarning(false)}
