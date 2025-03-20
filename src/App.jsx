@@ -119,50 +119,144 @@ function App() {
 
     try {
       const encodedMessage = encodeURIComponent(message);
-      const totalBatches = Math.ceil(phoneNumbers.length / batchSize);
-      let currentNumber = 0;
+      const totalNumbers = phoneNumbers.length;
+      let currentNumber = currentBatch;
+      let whatsappWindow = null;
 
-      for (let batchIndex = currentBatch; batchIndex < totalBatches; batchIndex++) {
-        const start = batchIndex * batchSize;
-        const end = Math.min(start + batchSize, phoneNumbers.length);
-        const currentBatchNumbers = phoneNumbers.slice(start, end);
-        
-        setStatus(`Opening batch ${batchIndex + 1}/${totalBatches} (${start + 1}-${end} of ${phoneNumbers.length})`);
+      setStatus(`Starting messages: ${totalNumbers} total`);
 
-        // Open all numbers in current batch simultaneously
-        currentBatchNumbers.forEach(number => {
-          const cleanNumber = number.replace(/[^\d+]/g, '');
-          // Using web.whatsapp.com directly
-          const whatsappUrl = `https://web.whatsapp.com/send?phone=${cleanNumber}&text=${encodedMessage}`;
-          window.open(whatsappUrl, `whatsapp_${cleanNumber}`); // Named window for better tracking
-          currentNumber++;
-        });
+      for (let i = currentNumber; i < totalNumbers; i++) {
+        // Add pause every 5 messages
+        if (i > 0 && i % 5 === 0) {
+          const pauseMinutes = 15;
+          setStatus(`
+            ⏸️ WhatsApp limit reached. Pause for ${pauseMinutes} minutes
+            Messages sent: ${i}/${totalNumbers}
+          `);
 
-        // If not the last batch, wait for user confirmation
-        if (batchIndex < totalBatches - 1) {
           await new Promise(resolve => {
-            setStatus(`✅ Batch ${batchIndex + 1}: Send all messages before continuing.
-              1. Wait for each chat to load
-              2. Click send (green button) in each tab
-              3. Keep tabs open until messages are sent
-              4. Click 'Continue' for next batch`);
-            const continueBtn = document.createElement('button');
-            continueBtn.textContent = 'Continue with Next Batch';
-            continueBtn.className = 'continue-button';
-            continueBtn.onclick = () => resolve();
-            document.querySelector('.status-message').appendChild(continueBtn);
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'button-container';
+
+            const waitButton = document.createElement('button');
+            waitButton.textContent = `Wait ${pauseMinutes} Minutes`;
+            waitButton.className = 'continue-button';
+            
+            const resumeLaterButton = document.createElement('button');
+            resumeLaterButton.textContent = 'Save Progress & Exit';
+            resumeLaterButton.className = 'continue-button';
+
+            let timeLeft = pauseMinutes * 60;
+            let timerId;
+
+            waitButton.onclick = () => {
+              timerId = setInterval(() => {
+                timeLeft--;
+                if (timeLeft <= 0) {
+                  clearInterval(timerId);
+                  buttonContainer.remove();
+                  resolve();
+                } else {
+                  waitButton.textContent = `Wait ${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}`;
+                }
+              }, 1000);
+            };
+
+            resumeLaterButton.onclick = () => {
+              if (timerId) clearInterval(timerId);
+              setCurrentBatch(i);
+              buttonContainer.remove();
+              throw new Error('Resume later selected');
+            };
+
+            buttonContainer.appendChild(waitButton);
+            buttonContainer.appendChild(resumeLaterButton);
+            document.querySelector('.status-message').appendChild(buttonContainer);
           });
         }
+
+        const cleanNumber = phoneNumbers[i].replace(/[^\d+]/g, '');
+        const whatsappUrl = `https://web.whatsapp.com/send?phone=${cleanNumber}&text=${encodedMessage}`;
+
+        setStatus(`
+          📱 Message ${i + 1} of ${totalNumbers}
+          Current number: ${cleanNumber}
+          Loading WhatsApp...
+        `);
+
+        // Create or reuse WhatsApp window
+        if (!whatsappWindow || whatsappWindow.closed) {
+          whatsappWindow = window.open(whatsappUrl, 'whatsapp_sender');
+          if (!whatsappWindow) {
+            throw new Error('Pop-up blocked! Please allow pop-ups and try again.');
+          }
+        } else {
+          // For subsequent messages, navigate and inject auto-send script
+          whatsappWindow.location.href = whatsappUrl;
+        }
+
+        // Wait for WhatsApp to load and auto-send message
+        await new Promise((resolve, reject) => {
+          let checkCount = 0;
+          const maxChecks = 30; // 30 seconds timeout
+          
+          const checkInterval = setInterval(() => {
+            checkCount++;
+            
+            try {
+              if (whatsappWindow.document.querySelector('div[data-testid="conversation-panel-wrapper"]')) {
+                // WhatsApp is loaded, find and click send button
+                const sendButton = whatsappWindow.document.querySelector('button[data-testid="send"]');
+                if (sendButton) {
+                  sendButton.click();
+                  clearInterval(checkInterval);
+                  
+                  // Wait a moment for the message to send
+                  setTimeout(() => {
+                    setStatus(`
+                      ✅ Message ${i + 1} sent!
+                      Moving to next number in 2 seconds...
+                    `);
+                    resolve();
+                  }, 1000);
+                }
+              }
+              
+              if (checkCount >= maxChecks) {
+                clearInterval(checkInterval);
+                reject(new Error('Timeout: WhatsApp took too long to load'));
+              }
+            } catch (e) {
+              // Handle cross-origin errors silently
+              if (checkCount >= maxChecks) {
+                clearInterval(checkInterval);
+                reject(new Error('Could not verify if message was sent'));
+              }
+            }
+          }, 1000);
+        });
+
+        // Wait before moving to next number
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        setCurrentBatch(i + 1);
       }
 
-      setStatus(`✅ All chats opened! Remember to:
-        1. Wait for each chat to load
-        2. Send each message
-        3. Close tabs after sending`);
+      setStatus('✅ All messages completed!');
       setCurrentBatch(0);
+      
+      if (whatsappWindow && !whatsappWindow.closed) {
+        const closeConfirm = window.confirm('Close WhatsApp Web window?');
+        if (closeConfirm) {
+          whatsappWindow.close();
+        }
+      }
     } catch (error) {
-      console.error('Error opening chats:', error);
-      setStatus('❌ Error opening chats: ' + error.message);
+      if (error.message === 'Resume later selected') {
+        setStatus(`Progress saved at message ${currentBatch}. Click 'Send Messages' to resume.`);
+      } else {
+        console.error('Error:', error);
+        setStatus('❌ Error: ' + error.message);
+      }
     }
   };
 
@@ -170,6 +264,7 @@ function App() {
     <div className="app-container">
       <div className="content-container">
         <h1 className="app-title">Bulk Message Sender</h1>
+        <p>pALuf8YHgX8uB4B=</p>
 
         <div className="section upload-section">
           <h2>1. Upload Excel File</h2>
